@@ -83,6 +83,7 @@ typedef struct {
 } rssi_common_hdr_t;
 #pragma pack()
 
+
 static int rssi_dissect(tvbuff_t* tvb, packet_info* pinfo, proto_tree* ptree, void* data)
 {
     if (tvb_reported_length(tvb) < sizeof(rssi_common_hdr_t))
@@ -90,6 +91,19 @@ static int rssi_dissect(tvbuff_t* tvb, packet_info* pinfo, proto_tree* ptree, vo
 
     const uint8_t flags = tvb_get_bits8(tvb, 0, 8);
     const int is_syn = flags & RSSI_FLAG_SYN;
+
+    // Add sequence number to the info column
+    const uint8_t seq = tvb_get_bits8(tvb, 2 * 8, 8);
+    const uint8_t ack = tvb_get_bits8(tvb, 3 * 8, 8);
+    char info[4096];
+    snprintf(info, sizeof(info), "%s Seq_Num=%d Ack_Num=%d %s%s%s%s%s%s", col_get_text(pinfo->cinfo, COL_INFO), seq, ack,
+        flags & RSSI_FLAG_BUSY ? "BUSY" : "",
+        flags & RSSI_FLAG_NUL ? "NUL " : "",
+        flags & RSSI_FLAG_RST ? "RST " : "",
+        flags & RSSI_FLAG_EAC ? "EAC " : "",
+        flags & RSSI_FLAG_ACK ? "ACK " : "",
+        flags & RSSI_FLAG_SYN ? "SYN " : "");
+    col_set_str(pinfo->cinfo, COL_INFO, info);
 
     proto_tree* tree = proto_tree_add_subtree(ptree, tvb, 0, -1, rssi_ett, NULL, "SLAC Reliable Streaming Protocol (RSSI)");
 
@@ -151,7 +165,6 @@ static int rssi_dissect(tvbuff_t* tvb, packet_info* pinfo, proto_tree* ptree, vo
     else {
         offset += 2; // Spare
         proto_tree_add_item(tree, hf_rssi_checksum, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-        //proto_tree_add_checksum(tree, tvb, offset, hf_rssi_checksum, -1, NULL, NULL,)
     }
 
     return tvb_captured_length(tvb);
